@@ -1,116 +1,95 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic, Categories } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { ExamplePlatformAccessory } from './platformAccessory';
+import { SoundClassificationPlatformAccessory } from './platformAccessory';
+import { WSClientInfo, WebSocketServer } from './websocketServer';
 
 /**
  * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
+ * 这个类是你的插件的主要构造器，你应该在这里解析用户配置并且发现/注册配件到Homebridge。
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class SoundClassificationPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
-  // this is used to track restored cached accessories
-  public readonly accessories: PlatformAccessory[] = [];
+  // 这个用来跟踪恢复的缓存配件
+  public accessories: PlatformAccessory[] = [];
+  public accessoriesMap: { [key: string]: SoundClassificationPlatformAccessory } = {};
+  public websocketServer?: WebSocketServer;
 
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-    this.log.debug('Finished initializing platform:', this.config.name);
+    this.log.debug('完成平台初始化:', this.config.name);
+    this.accessories = [];
 
-    // When this event is fired it means Homebridge has restored all cached accessories from disk.
-    // Dynamic Platform plugins should only register new accessories after this event was fired,
-    // in order to ensure they weren't added to homebridge already. This event can also be used
-    // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
-      log.debug('Executed didFinishLaunching callback');
-      // run the method to discover / register your devices as accessories
+      // 延迟1秒启动websocket服务器
+      this.websocketServer = new WebSocketServer(
+        this.log,
+        this.config.websocketPort,
+        info => this.callbackDeviceOnline(info),
+        (info, result) => this.callbackDevicePushProbability(info, result),
+      );
+      // 运行方法来发现 / 注册你的设备作为配件
       this.discoverDevices();
+    });
+    this.api.on('shutdown', () => {
+      if (this.websocketServer) {
+        this.websocketServer.close();
+      }
     });
   }
 
-  /**
-   * This function is invoked when homebridge restores cached accessories from disk at startup.
-   * It should be used to setup event handlers for characteristics and update respective values.
-   */
-  configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+  callbackDeviceOnline(info: WSClientInfo) {
+    const accessory = this.accessories.find(accessory => accessory.UUID === info.uuid);
+    if (!accessory) {
+      // 未找到配件
+      this.log.info('未找到配件, 正在新建:', info.name, info.uuid);
+      // 新建
+      const uuid = info.uuid;
+      const accessory = new this.api.platformAccessory(info.name, uuid, Categories.DOOR_LOCK);
+      accessory.context.device = info;
+      const instance = new SoundClassificationPlatformAccessory(this, accessory);
+      this.accessoriesMap[uuid] = instance;
+      // 将配件链接到你的平台
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessories.push(accessory);
+    }
+  }
 
-    // add the restored accessory to the accessories cache so we can track if it has already been registered
-    this.accessories.push(accessory);
+  callbackDevicePushProbability(info: WSClientInfo, result: { index: number; display_name: string; probability: number }[]) {
+    const accessory = this.accessories.find(accessory => accessory.UUID === info.uuid);
+    if (accessory && this.accessoriesMap[info.uuid] instanceof SoundClassificationPlatformAccessory) {
+      this.accessoriesMap[info.uuid].checkSound(result);
+    }
   }
 
   /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
+   * 当homebridge在启动时从磁盘恢复缓存配件时，这个函数会被调用。
+   * 它应该被用来设置特性的事件处理器并更新相应的值。
    */
+  configureAccessory(accessory: PlatformAccessory) {
+    this.log.info('从缓存加载配件:', accessory.displayName);
+
+    // 将恢复的配件添加到配件缓存，这样我们就可以跟踪它是否已经被注册
+    this.accessories.push(accessory);
+  }
+
   discoverDevices() {
-
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
-
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
-
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
-
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-
-      if (existingAccessory) {
-        // the accessory already exists
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
-
-        // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, existingAccessory);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
-      } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
-
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
-
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      }
+    // 直接遍历配置文件中的设备
+    for (const accessory of this.accessories) {
+      this.log.info('移除配件:', accessory.displayName);
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      /* const device = accessory.context.device;
+      if (device) {
+        this.log.info('从缓存恢复现有配件:', device.name, device.uuid);
+        new SoundClassificationPlatformAccessory(this, accessory);
+      } */
     }
+    // 清空配件缓存
+    this.accessories.splice(0, this.accessories.length);
   }
 }

@@ -1,16 +1,16 @@
 {
   "private": true,
-  "displayName": "Plugin Name",
-  "name": "homebridge-plugin-name",
+  "displayName": "SoundClassification Plugin",
+  "name": "homebridge-plugin-sound-classification",
   "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "description": "Homebridge plugin for sound classification from remote device(YSMNet) through WS",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/boybook/homebridge-plugin-soundclassification.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/boybook/homebridge-plugin-soundclassification/issues"
   },
   "engines": {
     "node": "^18.17.0 || ^20.9.0",
@@ -26,9 +26,13 @@
   "keywords": [
     "homebridge-plugin"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "csv-parse": "^5.5.3",
+    "ws": "^8.16.0"
+  },
   "devDependencies": {
     "@types/node": "^18.16.20",
+    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.45.0",
