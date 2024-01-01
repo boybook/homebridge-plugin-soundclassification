@@ -10,6 +10,7 @@ import { SoundClassificationPlatform } from './platform';
 
 export class SoundClassificationPlatformAccessory {
   private serviceBell: Service;
+  private serviceSensor: Service;
 
   constructor(
     private readonly platform: SoundClassificationPlatform,
@@ -25,28 +26,36 @@ export class SoundClassificationPlatformAccessory {
     this.serviceBell = this.accessory.getService(this.platform.Service.Doorbell)
      || this.accessory.addService(this.platform.Service.Doorbell);
 
+    this.serviceSensor = this.accessory.getService(this.platform.Service.MotionSensor)
+     || this.accessory.addService(this.platform.Service.MotionSensor);
+    this.serviceSensor.getCharacteristic(this.platform.Characteristic.MotionDetected)
+      .onGet(this.handleMotionDetectedGet.bind(this));
+
     // 设置服务名称
     this.serviceBell.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+    this.serviceSensor.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
   }
 
-  effective_sounds = [
-    'Telephone',
-    'Telephone bell ringing',
-    'Alarm clock',
-    'Alarm',
-    'Beep, bleep',
-    'Ringtone',
-    'Knock',
-  ];
+  /**
+   * Handle requests to get the current value of the "Current Relative Humidity" characteristic
+   */
+  handleMotionDetectedGet() {
+    const lastTriggered = this.accessory.context.lastTriggered;
+    const now = Date.now();
+    const cooldown = 5000;
+    const currentValue = lastTriggered && now - lastTriggered < cooldown;
+    return !!currentValue;
+  }
 
   checkNeedRing(result: { index: number; display_name: string; probability: number }[]) {
     if (result.length > 0) {
+      const effective_sounds = this.platform.config.effective_sounds;
       const result0 = result[0];
       if (result0.display_name === 'Music' && result.length > 1) {
         const result1 = result[1];
-        return this.effective_sounds.find(s => s === result1.display_name) && result1.probability > 0.4;
+        return effective_sounds.find((s: string) => s === result1.display_name) && result1.probability > 0.4;
       }
-      return this.effective_sounds.find(s => s === result0.display_name) && result0.probability > 0.5;
+      return effective_sounds.find((s: string) => s === result0.display_name) && result0.probability > 0.5;
     }
     return false;
   }

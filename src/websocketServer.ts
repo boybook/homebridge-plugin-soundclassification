@@ -129,7 +129,7 @@ export class WebSocketServer {
   handleProbabilityData(client: WebSocket, data: ArrayBuffer) {
     const userInfo = this.getClient(client);
     if (!userInfo) {
-      this.log.error('Unknown client from {}', client.url);
+      this.log.debug('Unknown client from ', client);
       return;
     }
     const result = this.decodeProbabilityData(data);

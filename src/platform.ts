@@ -26,7 +26,20 @@ export class SoundClassificationPlatform implements DynamicPlatformPlugin {
     this.accessories = [];
 
     this.api.on('didFinishLaunching', () => {
-      // 延迟1秒启动websocket服务器
+      // 初始化配置
+      if (!this.config.effective_sounds) {
+        log.debug('未配置有效声音, 使用默认值');
+        this.config.effective_sounds = [
+          'Telephone',
+          'Telephone bell ringing',
+          'Alarm clock',
+          'Alarm',
+          'Beep, bleep',
+          'Ringtone',
+          'Knock',
+        ];
+      }
+      // 启动websocket服务器
       this.websocketServer = new WebSocketServer(
         this.log,
         this.config.websocketPort,
@@ -50,7 +63,7 @@ export class SoundClassificationPlatform implements DynamicPlatformPlugin {
       this.log.info('未找到配件, 正在新建:', info.name, info.uuid);
       // 新建
       const uuid = info.uuid;
-      const accessory = new this.api.platformAccessory(info.name, uuid, Categories.DOOR_LOCK);
+      const accessory = new this.api.platformAccessory(info.name + ' Bell', uuid, Categories.DOOR_LOCK);
       accessory.context.device = info;
       const instance = new SoundClassificationPlatformAccessory(this, accessory);
       this.accessoriesMap[uuid] = instance;
