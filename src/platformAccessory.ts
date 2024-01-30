@@ -55,7 +55,7 @@ export class SoundClassificationPlatformAccessory {
         const result1 = result[1];
         return effective_sounds.find((s: string) => s === result1.display_name) && result1.probability > 0.4;
       }
-      return effective_sounds.find((s: string) => s === result0.display_name) && result0.probability > 0.5;
+      return effective_sounds.find((s: string) => s === result0.display_name) && result0.probability >= 0.6;
     }
     return false;
   }
